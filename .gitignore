@@ -8,3 +8,6 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .DS_Store
+
+# VAPID keys — secrets, never commit (held in Secret Manager / local only).
+*.pem
