@@ -1,0 +1,18 @@
+[project]
+name = "onebite-push-dispatcher"
+version = "0.1.0"
+description = "Adaptive daily-reminder Web Push dispatcher for OneBite — runs as a Cloud Run Job on an hourly cron."
+requires-python = ">=3.12"
+dependencies = [
+    "asyncpg>=0.31.0",
+    "greenlet>=3.5.1",
+    "pydantic>=2",
+    "pydantic-settings>=2.14.1",
+    "pywebpush>=2.3.0",
+    "sqlalchemy[asyncio]>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.14",
+]

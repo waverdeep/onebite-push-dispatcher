@@ -1,0 +1,64 @@
+# Cloud Build pipeline for onebite-push-dispatcher.
+#
+#   gcloud builds submit --config cloudbuild.yaml
+#
+# Builds the container, pushes it to Artifact Registry, and deploys the Cloud
+# Run Job (create-or-update — safe on first run and on every redeploy).
+#
+# Override defaults per build, e.g.:
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_REGION=asia-northeast3,_REPO=onebite,_TAG=$(git rev-parse --short HEAD)
+#
+# NOTE: this pipeline does NOT set the job's env vars / secrets, so it won't
+# clobber them on redeploy. Configure DB_HOST/DB_USER/DB_NAME/... and the
+# DB_PASSWORD + VAPID_PRIVATE_KEY secrets once via `gcloud run jobs update`
+# (see README) — they persist across deploys. The scheduler (Cloud Scheduler)
+# is also set up once out of band; see README.
+
+substitutions:
+  _REGION: asia-northeast3
+  _REPO: onebite                 # Artifact Registry repository
+  _IMAGE_NAME: push-dispatcher
+  _JOB: dispatch-push
+  _TAG: latest
+
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE_NAME}:${_TAG}"
+
+steps:
+  # 1) Build (tag both the requested tag and :latest for convenience)
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE_NAME}:${_TAG}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE_NAME}:latest"
+      - "."
+
+  # 2) Push all tags of the image
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - "--all-tags"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE_NAME}"
+
+  # 3) Deploy the Cloud Run Job (creates it if missing, updates the image if it exists)
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - deploy
+      - "${_JOB}"
+      - "--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE_NAME}:${_TAG}"
+      - "--region=${_REGION}"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 1200s

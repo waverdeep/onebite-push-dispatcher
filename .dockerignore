@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+.env
+.env.*
+__pycache__/
+*.pyc
+*.pyo
+.ruff_cache/
+.mypy_cache/
+.DS_Store
+.vscode/
+.idea/
+README.md
+Dockerfile
+.dockerignore
+cloudbuild.yaml
