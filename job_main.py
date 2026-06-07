@@ -42,8 +42,28 @@ log = logging.getLogger("push_dispatcher_job")
 
 REMINDER_TYPE = "daily_reminder"
 REMINDER_TITLE = "오늘의 한입"
-REMINDER_BODY = "오늘의 퀴즈가 기다리고 있어요 🍙"
 REMINDER_LINK = "/"
+
+# Body copy rotates daily to fight notification fatigue. The same line goes to
+# every user on a given day (chosen by KST date, not random), which keeps the run
+# idempotent — a retried trigger picks the same line — and lets us reason about
+# "what went out today" at a glance.
+REMINDER_BODIES = [
+    "오늘의 퀴즈가 기다리고 있어요 🍙",
+    "딱 한입, 오늘의 문제 풀고 가실래요? 🍙",
+    "오늘 한입 안 드셨네요. 1분이면 충분해요 ⏱️",
+    "연속 기록 이어가요! 오늘 퀴즈가 준비됐어요 🔥",
+    "잠깐의 짬, 한입 퀴즈로 채워보세요 🧠",
+    "오늘의 한입이 도착했어요. 풀고 랭킹 올려요 📈",
+    "하루 한 문제, 오늘 몫이 남아있어요 🍙",
+    "두뇌 워밍업 한입, 지금 풀어볼까요? ☕",
+]
+
+
+def reminder_body_for_today() -> str:
+    """Pick today's reminder line by KST date ordinal — deterministic per day."""
+    day_ordinal = datetime.now(KST).date().toordinal()
+    return REMINDER_BODIES[day_ordinal % len(REMINDER_BODIES)]
 
 
 def resolve_slot_hour() -> int:
@@ -68,6 +88,7 @@ async def run(slot_hour: int) -> None:
     )
     sent = 0
     day_start = _kst_day_start_utc()
+    body = reminder_body_for_today()
     try:
         async with SessionLocal() as db:
             # A reminder already written for this user today (idempotency guard
@@ -102,7 +123,7 @@ async def run(slot_hour: int) -> None:
                     user_id,
                     type=REMINDER_TYPE,
                     title=REMINDER_TITLE,
-                    body=REMINDER_BODY,
+                    body=body,
                     link=REMINDER_LINK,
                 )
                 sent += 1
