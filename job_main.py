@@ -13,6 +13,12 @@ Cloud Scheduler triggers this once an hour (`0 * * * *`, Asia/Seoul). Each run:
   4. Re-learn that user's reminder hour from recent solves and store it for
      tomorrow (only when daily_push_hour_auto).
 
+On top of the per-user adaptive reminder, the LAST_CALL_HOUR slot (21 KST) also
+fires a single "deadline is near" nudge to everyone who has push on but has NOT
+completed today's quiz for their daily domain — a second notification type
+(daily_last_call), gated by the same daily_push_enabled toggle and its own
+idempotency guard so it never double-sends.
+
 Override the slot for local testing with PUSH_HOUR=14 or the first CLI arg.
 
 sender.deliver / adaptive.learn_push_hour are copied verbatim from onebite-server
@@ -24,7 +30,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import and_, exists, select
 
@@ -32,7 +38,13 @@ from app.core.config import settings
 from app.core.db import SessionLocal, engine
 from app.domains.notifications import adaptive, sender
 from app.domains.notifications.adaptive import KST
-from app.models import Notification, User, UserSettings
+from app.models import (
+    DailyAttempt,
+    DailyQuiz,
+    Notification,
+    User,
+    UserSettings,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,6 +78,32 @@ def reminder_body_for_today() -> str:
     return REMINDER_BODIES[day_ordinal % len(REMINDER_BODIES)]
 
 
+# --- Last-call (deadline-near) nudge: one fixed evening slot, only to users who
+# have not completed today's quiz. Same daily_push_enabled toggle, separate type
+# and idempotency window so it never collides with the adaptive reminder.
+LAST_CALL_HOUR = 21  # KST. ~3h before the 23:59:59 KST quiz close.
+LAST_CALL_TYPE = "daily_last_call"
+LAST_CALL_TITLE = "오늘의 한입 마감 임박"
+LAST_CALL_LINK = "/"
+LAST_CALL_BODIES = [
+    "오늘의 한입, 아직 안 푸셨어요. 자정 전에 마무리해요 🍙",
+    "마감까지 얼마 안 남았어요. 1분이면 끝나요 ⏰",
+    "오늘 기록 놓치지 마세요. 지금 한입 어때요? 🔥",
+    "잠들기 전 딱 한 문제, 오늘 몫 챙기고 가요 🌙",
+]
+
+
+def last_call_body_for_today() -> str:
+    """Pick today's last-call line by KST date ordinal — deterministic per day."""
+    day_ordinal = datetime.now(KST).date().toordinal()
+    return LAST_CALL_BODIES[day_ordinal % len(LAST_CALL_BODIES)]
+
+
+def _kst_today() -> date:
+    """KST calendar date — matches DailyQuiz.quiz_date."""
+    return datetime.now(KST).date()
+
+
 def resolve_slot_hour() -> int:
     raw = sys.argv[1] if len(sys.argv) > 1 else os.getenv("PUSH_HOUR")
     if raw:
@@ -78,6 +116,69 @@ def _kst_day_start_utc() -> datetime:
     now_kst = datetime.now(KST)
     midnight_kst = now_kst.replace(hour=0, minute=0, second=0, microsecond=0)
     return midnight_kst.astimezone(UTC)
+
+
+async def run_last_call(db, day_start: datetime) -> int:
+    """Send the deadline-near nudge to push-enabled users who have NOT completed
+    today's quiz for their daily domain. Returns the number sent. Caller commits.
+
+    "Not completed" = no DailyAttempt with status='completed' against the
+    DailyQuiz for (the user's daily_domain_id, today KST). A user who only
+    started (in_progress) still counts as not-done, so they get nudged.
+    """
+    today = _kst_today()
+    body = last_call_body_for_today()
+
+    # This user already got a last-call today (idempotency vs retried triggers).
+    already_today = (
+        select(Notification.id)
+        .where(
+            Notification.user_id == User.id,
+            Notification.type == LAST_CALL_TYPE,
+            Notification.created_at >= day_start,
+        )
+        .correlate(User)
+    )
+    # This user has a completed attempt on their domain's quiz for today.
+    completed_today = (
+        select(DailyAttempt.id)
+        .join(DailyQuiz, DailyQuiz.id == DailyAttempt.daily_quiz_id)
+        .where(
+            DailyAttempt.user_id == User.id,
+            DailyAttempt.status == "completed",
+            DailyQuiz.quiz_date == today,
+            DailyQuiz.domain_id == UserSettings.daily_domain_id,
+        )
+        .correlate(User, UserSettings)
+    )
+
+    user_ids = (
+        await db.scalars(
+            select(User.id)
+            .join(UserSettings, UserSettings.user_id == User.id)
+            .where(
+                and_(
+                    UserSettings.daily_push_enabled.is_(True),
+                    User.deleted_at.is_(None),
+                    ~exists(already_today),
+                    ~exists(completed_today),
+                )
+            )
+        )
+    ).all()
+
+    for user_id in user_ids:
+        await sender.deliver(
+            db,
+            user_id,
+            type=LAST_CALL_TYPE,
+            title=LAST_CALL_TITLE,
+            body=body,
+            link=LAST_CALL_LINK,
+        )
+
+    log.info("last-call done: sent=%d", len(user_ids))
+    return len(user_ids)
 
 
 async def run(slot_hour: int) -> None:
@@ -135,6 +236,10 @@ async def run(slot_hour: int) -> None:
                         settings_row = await db.get(UserSettings, user_id)
                         if settings_row is not None:
                             settings_row.daily_push_hour = learned
+
+            # Deadline-near nudge runs in the same transaction at its fixed slot.
+            if slot_hour == LAST_CALL_HOUR:
+                await run_last_call(db, day_start)
 
             await db.commit()
     finally:
