@@ -51,8 +51,8 @@ class Pack(Base):
     domain_id: Mapped[str] = mapped_column(
         String, ForeignKey("domains.id"), nullable=False
     )
-    category_id: Mapped[str] = mapped_column(
-        String, ForeignKey("categories.id"), nullable=False
+    category_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("categories.id"), nullable=True
     )
     slug: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
