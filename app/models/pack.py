@@ -166,11 +166,14 @@ class PackAttemptAnswer(Base):
         UniqueConstraint(
             "attempt_id", "question_id", name="uq_paa_attempt_question"
         ),
-        CheckConstraint("answer_type IN (1, 2, 3)", name="ck_paa_answer_type"),
+        # 4 = multiple_select (sorted comma-joined choice ids in answer_text);
+        # 5 is reserved for a future ordering type (same answer_text shape).
+        CheckConstraint("answer_type IN (1, 2, 3, 4, 5)", name="ck_paa_answer_type"),
         CheckConstraint(
+            "gave_up OR ("
             "(answer_type = 1 AND selected_choice_id IS NOT NULL AND answer_text IS NULL)"
-            " OR (answer_type IN (2, 3) AND selected_choice_id IS NULL"
-            " AND answer_text IS NOT NULL)",
+            " OR (answer_type IN (2, 3, 4, 5) AND selected_choice_id IS NULL"
+            " AND answer_text IS NOT NULL))",
             name="ck_paa_answer_shape",
         ),
     )
@@ -185,6 +188,10 @@ class PackAttemptAnswer(Base):
     answer_text: Mapped[str | None] = mapped_column(Text)
     answered_at: Mapped[datetime] = created_at_col()
     is_correct: Mapped[bool | None] = mapped_column(Boolean)
+    # "모르겠어요" — see DailyAttemptAnswer.gave_up.
+    gave_up: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false"), nullable=False
+    )
     elapsed_ms: Mapped[int | None] = mapped_column(Integer)
 
 

@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     ForeignKey,
@@ -83,11 +84,14 @@ class DailyAttemptAnswer(Base):
         UniqueConstraint(
             "attempt_id", "question_id", name="uq_daily_attempt_answers_question"
         ),
-        CheckConstraint("answer_type IN (1, 2, 3)", name="ck_daa_answer_type"),
+        # 4 = multiple_select (sorted comma-joined choice ids in answer_text);
+        # 5 is reserved for a future ordering type (same answer_text shape).
+        CheckConstraint("answer_type IN (1, 2, 3, 4, 5)", name="ck_daa_answer_type"),
         CheckConstraint(
+            "gave_up OR ("
             "(answer_type = 1 AND selected_choice_id IS NOT NULL AND answer_text IS NULL)"
-            " OR (answer_type IN (2, 3) AND selected_choice_id IS NULL"
-            " AND answer_text IS NOT NULL)",
+            " OR (answer_type IN (2, 3, 4, 5) AND selected_choice_id IS NULL"
+            " AND answer_text IS NOT NULL))",
             name="ck_daa_answer_shape",
         ),
     )
@@ -104,6 +108,11 @@ class DailyAttemptAnswer(Base):
         TZDateTime, server_default=text("now()"), nullable=False
     )
     is_correct: Mapped[bool | None] = mapped_column()
+    # "모르겠어요": the learner explicitly skipped. Stored with is_correct=False
+    # and no choice/text — counts as solved but never correct.
+    gave_up: Mapped[bool] = mapped_column(
+        Boolean, server_default=text("false"), nullable=False
+    )
     elapsed_ms: Mapped[int | None] = mapped_column(Integer)
     base_score: Mapped[int | None] = mapped_column(Integer)
     bonus_score: Mapped[int | None] = mapped_column(Integer)

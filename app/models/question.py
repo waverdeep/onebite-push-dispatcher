@@ -16,7 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import UUID, Base, TZDateTime, created_at_col, uuid_fk, uuid_pk
 
-QUESTION_TYPES = ("ox", "multiple_choice", "short_answer")
+QUESTION_TYPES = ("ox", "multiple_choice", "short_answer", "multiple_select")
 QUESTION_STATUSES = ("draft", "reviewed", "published", "archived")
 REPORT_REASONS = ("wrong_answer", "typo", "ambiguous", "other")
 REPORT_STATUSES = ("open", "resolved", "dismissed")
@@ -26,7 +26,7 @@ class Question(Base):
     __tablename__ = "questions"
     __table_args__ = (
         CheckConstraint(
-            "type IN ('ox', 'multiple_choice', 'short_answer')",
+            "type IN ('ox', 'multiple_choice', 'short_answer', 'multiple_select')",
             name="ck_questions_type",
         ),
         CheckConstraint(
