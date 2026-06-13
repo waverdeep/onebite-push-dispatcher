@@ -44,6 +44,7 @@ from app.models import (
     Notification,
     User,
     UserSettings,
+    UserStats,
 )
 
 logging.basicConfig(
@@ -119,8 +120,15 @@ def _kst_day_start_utc() -> datetime:
 
 
 async def run_last_call(db, day_start: datetime) -> int:
-    """Send the deadline-near nudge to push-enabled users who have NOT completed
-    today's quiz for their daily domain. Returns the number sent. Caller commits.
+    """Send the deadline-near nudge to push-enabled users who have a streak to
+    lose (current_streak > 0) and have NOT completed today's quiz for their
+    daily domain. Returns the number sent. Caller commits.
+
+    This mirrors the client's crisis signals exactly (crisis-banner.tsx /
+    streak-chip.tsx fire on current_streak > 0 && not-completed-today), so the
+    push only lands when there's a streak genuinely at risk — never to users
+    with nothing to break (streak 0, including never-solved users with no
+    UserStats row, who are excluded by the inner join).
 
     "Not completed" = no DailyAttempt with status='completed' against the
     DailyQuiz for (the user's daily_domain_id, today KST). A user who only
@@ -156,9 +164,13 @@ async def run_last_call(db, day_start: datetime) -> int:
         await db.scalars(
             select(User.id)
             .join(UserSettings, UserSettings.user_id == User.id)
+            # inner join: users without a UserStats row have no streak to lose
+            # and are excluded — matching the "위기" (at-risk) intent.
+            .join(UserStats, UserStats.user_id == User.id)
             .where(
                 and_(
                     UserSettings.daily_push_enabled.is_(True),
+                    UserStats.current_streak > 0,
                     User.deleted_at.is_(None),
                     ~exists(already_today),
                     ~exists(completed_today),
