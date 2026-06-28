@@ -10,14 +10,14 @@ class Category(Base):
     __tablename__ = "categories"
     __table_args__ = (
         Index("ix_categories_active_order", "is_active", "display_order"),
-        Index("ix_categories_domain_order", "domain_id", "display_order"),
+        Index("ix_categories_subject_order", "subject_id", "display_order"),
     )
 
     # slug-style varchar PK (e.g. "algorithm", "os"); doubles as the public/URL
     # identifier, so no separate slug column.
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    domain_id: Mapped[str] = mapped_column(
-        String, ForeignKey("domains.id"), nullable=False
+    subject_id: Mapped[str] = mapped_column(
+        String, ForeignKey("subjects.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False)

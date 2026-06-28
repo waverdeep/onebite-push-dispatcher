@@ -15,7 +15,7 @@ Cloud Scheduler triggers this once an hour (`0 * * * *`, Asia/Seoul). Each run:
 
 On top of the per-user adaptive reminder, the LAST_CALL_HOUR slot (21 KST) also
 fires a single "deadline is near" nudge to everyone who has push on but has NOT
-completed today's quiz for their daily domain — a second notification type
+completed today's quiz for their daily subject — a second notification type
 (daily_last_call), gated by the same daily_push_enabled toggle and its own
 idempotency guard so it never double-sends.
 
@@ -122,7 +122,7 @@ def _kst_day_start_utc() -> datetime:
 async def run_last_call(db, day_start: datetime) -> int:
     """Send the deadline-near nudge to push-enabled users who have a streak to
     lose (current_streak > 0) and have NOT completed today's quiz for their
-    daily domain. Returns the number sent. Caller commits.
+    daily subject. Returns the number sent. Caller commits.
 
     This mirrors the client's crisis signals exactly (crisis-banner.tsx /
     streak-chip.tsx fire on current_streak > 0 && not-completed-today), so the
@@ -131,7 +131,7 @@ async def run_last_call(db, day_start: datetime) -> int:
     UserStats row, who are excluded by the inner join).
 
     "Not completed" = no DailyAttempt with status='completed' against the
-    DailyQuiz for (the user's daily_domain_id, today KST). A user who only
+    DailyQuiz for (the user's daily_subject_id, today KST). A user who only
     started (in_progress) still counts as not-done, so they get nudged.
     """
     today = _kst_today()
@@ -147,7 +147,7 @@ async def run_last_call(db, day_start: datetime) -> int:
         )
         .correlate(User)
     )
-    # This user has a completed attempt on their domain's quiz for today.
+    # This user has a completed attempt on their subject's quiz for today.
     completed_today = (
         select(DailyAttempt.id)
         .join(DailyQuiz, DailyQuiz.id == DailyAttempt.daily_quiz_id)
@@ -155,7 +155,7 @@ async def run_last_call(db, day_start: datetime) -> int:
             DailyAttempt.user_id == User.id,
             DailyAttempt.status == "completed",
             DailyQuiz.quiz_date == today,
-            DailyQuiz.domain_id == UserSettings.daily_domain_id,
+            DailyQuiz.subject_id == UserSettings.daily_subject_id,
         )
         .correlate(User, UserSettings)
     )

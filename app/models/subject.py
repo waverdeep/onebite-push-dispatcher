@@ -6,12 +6,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base, created_at_col
 
 
-class Domain(Base):
-    __tablename__ = "domains"
-    __table_args__ = (Index("ix_domains_active_order", "is_active", "display_order"),)
+class Subject(Base):
+    __tablename__ = "subjects"
+    __table_args__ = (Index("ix_subjects_active_order", "is_active", "display_order"),)
 
     # slug-style varchar PK (e.g. "cs"); doubles as the public/URL identifier,
-    # so no separate slug column. Top-level grouping above Category.
+    # so no separate slug column. Top-level 분야 grouping above Category.
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -22,4 +22,4 @@ class Domain(Base):
     created_at: Mapped[datetime] = created_at_col()
 
 
-__all__ = ["Domain"]
+__all__ = ["Subject"]

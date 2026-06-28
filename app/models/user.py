@@ -63,9 +63,9 @@ class UserSettings(Base):
     daily_push_hour_auto: Mapped[bool] = mapped_column(
         Boolean, server_default=text("true"), nullable=False
     )
-    daily_domain_id: Mapped[str] = mapped_column(
+    daily_subject_id: Mapped[str] = mapped_column(
         String,
-        ForeignKey("domains.id"),
+        ForeignKey("subjects.id"),
         server_default=text("'cs'"),
         nullable=False,
     )
@@ -84,7 +84,7 @@ class UserSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(
         TZDateTime, server_default=text("now()"), nullable=False
     )
-    # True once the user has actively chosen a daily domain (see patch_settings).
+    # True once the user has actively chosen a daily subject (see patch_settings).
     # New signups start false → the web client gates first-run onboarding on it.
     onboarded: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false"), nullable=False

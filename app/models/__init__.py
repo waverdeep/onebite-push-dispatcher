@@ -5,7 +5,7 @@ from app.core.db import Base
 from app.models.auth import EmailVerification, RateLimit, RefreshToken
 from app.models.category import Category
 from app.models.company import Company, CompanyDomain
-from app.models.domain import Domain
+from app.models.subject import Subject
 from app.models.notifications import Notification, PushSubscription
 from app.models.daily_quiz import (
     DailyAttempt,
@@ -48,8 +48,8 @@ __all__ = [
     "EmailVerification",
     "RefreshToken",
     "RateLimit",
-    # domain
-    "Domain",
+    # subject (학습 분야)
+    "Subject",
     # category
     "Category",
     # question

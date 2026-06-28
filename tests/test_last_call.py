@@ -2,8 +2,8 @@
 
 The deadline-near nudge must go to exactly: push-enabled users with a streak to
 lose (current_streak > 0) who have NOT completed today's quiz for their daily
-domain, and only once per day. These tests pin that selection by seeding a few
-users on an isolated throwaway domain (so nothing collides with production data)
+subject, and only once per day. These tests pin that selection by seeding a few
+users on an isolated throwaway subject (so nothing collides with production data)
 and asserting which user_ids run_last_call hands to sender.deliver.
 
 sender.deliver is monkeypatched to just record user_ids — no VAPID / Web Push.
@@ -21,7 +21,7 @@ from app.domains.notifications.adaptive import KST
 from app.models import (
     DailyAttempt,
     DailyQuiz,
-    Domain,
+    Subject,
     Notification,
     User,
     UserSettings,
@@ -46,18 +46,18 @@ def _mk_user(email_tag: str) -> User:
 
 @pytest_asyncio.fixture
 async def seeded(db_sessionmaker):
-    """Seed an isolated domain + today's quiz + a matrix of users, yield their
+    """Seed an isolated subject + today's quiz + a matrix of users, yield their
     ids, then tear everything down. Returns a dict of labelled user ids + the
-    domain id so the test can assert against specific rows."""
-    domain_id = f"test-lc-{uuid.uuid4().hex[:8]}"
-    track_id = f"{domain_id}-all"
+    subject id so the test can assert against specific rows."""
+    subject_id = f"test-lc-{uuid.uuid4().hex[:8]}"
+    track_id = f"{subject_id}-all"
     today = _kst_today()
     created_user_ids: list[uuid.UUID] = []
     quiz_id = None
     try:
         async with db_sessionmaker() as db:
             db.add(
-                Domain(id=domain_id, name="LastCall Test", display_order=9999)
+                Subject(id=subject_id, name="LastCall Test", display_order=9999)
             )
             await db.flush()
             # Track + DailyQuiz via raw SQL: the real daily_quizzes table requires
@@ -65,21 +65,21 @@ async def seeded(db_sessionmaker):
             # DailyQuiz model omits the column. Insert explicitly to satisfy it.
             await db.execute(
                 text(
-                    "INSERT INTO tracks (id, domain_id, name, display_order) "
-                    "VALUES (:id, :domain_id, :name, 9999)"
+                    "INSERT INTO tracks (id, subject_id, name, display_order) "
+                    "VALUES (:id, :subject_id, :name, 9999)"
                 ),
-                {"id": track_id, "domain_id": domain_id, "name": "LastCall Track"},
+                {"id": track_id, "subject_id": subject_id, "name": "LastCall Track"},
             )
             quiz_id = uuid.uuid4()
             await db.execute(
                 text(
                     "INSERT INTO daily_quizzes "
-                    "(id, domain_id, track_id, quiz_date, opens_at, closes_at) "
-                    "VALUES (:id, :domain_id, :track_id, :qd, :opens, :closes)"
+                    "(id, subject_id, track_id, quiz_date, opens_at, closes_at) "
+                    "VALUES (:id, :subject_id, :track_id, :qd, :opens, :closes)"
                 ),
                 {
                     "id": quiz_id,
-                    "domain_id": domain_id,
+                    "subject_id": subject_id,
                     "track_id": track_id,
                     "qd": today,
                     "opens": datetime.now(UTC) - timedelta(days=1),
@@ -109,7 +109,7 @@ async def seeded(db_sessionmaker):
                     UserSettings(
                         user_id=user.id,
                         daily_push_enabled=cfg["push"],
-                        daily_domain_id=domain_id,
+                        daily_subject_id=subject_id,
                     )
                 )
                 db.add(
@@ -126,7 +126,7 @@ async def seeded(db_sessionmaker):
                     )
             await db.commit()
 
-        yield {"ids": ids, "domain_id": domain_id, "quiz_id": quiz_id}
+        yield {"ids": ids, "subject_id": subject_id, "quiz_id": quiz_id}
     finally:
         async with db_sessionmaker() as db:
             if quiz_id is not None:
@@ -152,7 +152,7 @@ async def seeded(db_sessionmaker):
             )
             for uid in created_user_ids:
                 await db.execute(delete(User).where(User.id == uid))
-            await db.execute(delete(Domain).where(Domain.id == domain_id))
+            await db.execute(delete(Subject).where(Subject.id == subject_id))
             await db.commit()
 
 

@@ -26,14 +26,14 @@ class DailyQuiz(Base):
     __tablename__ = "daily_quizzes"
     __table_args__ = (
         UniqueConstraint(
-            "domain_id", "quiz_date", name="uq_daily_quizzes_domain_date"
+            "subject_id", "quiz_date", name="uq_daily_quizzes_subject_date"
         ),
         Index("ix_daily_quizzes_date", "quiz_date"),
     )
 
     id: Mapped[UUID] = uuid_pk()
-    domain_id: Mapped[str] = mapped_column(
-        String, ForeignKey("domains.id"), nullable=False
+    subject_id: Mapped[str] = mapped_column(
+        String, ForeignKey("subjects.id"), nullable=False
     )
     quiz_date: Mapped[date] = mapped_column(Date, nullable=False)
     opens_at: Mapped[datetime] = mapped_column(TZDateTime, nullable=False)
