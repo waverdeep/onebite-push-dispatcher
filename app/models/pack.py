@@ -29,8 +29,8 @@ PACK_UNLOCK_KINDS = ("scheduled", "advanced")
 class Pack(Base):
     """A curated bundle of questions inside a category, delivered round by round.
 
-    `domain_id` is denormalized (reachable via category) to keep "all packs in a
-    domain" a single-index lookup. `question_count` / `total_rounds` are
+    `subject_id` is denormalized (reachable via category) to keep "all packs in a
+    subject" a single-index lookup. `question_count` / `total_rounds` are
     denormalized counters owned solely by the seed script (§6.8-3)."""
 
     __tablename__ = "packs"
@@ -40,16 +40,16 @@ class Pack(Base):
             name="ck_packs_status",
         ),
         Index(
-            "ix_packs_domain_category_status",
-            "domain_id",
+            "ix_packs_subject_category_status",
+            "subject_id",
             "category_id",
             "status",
         ),
     )
 
     id: Mapped[UUID] = uuid_pk()
-    domain_id: Mapped[str] = mapped_column(
-        String, ForeignKey("domains.id"), nullable=False
+    subject_id: Mapped[str] = mapped_column(
+        String, ForeignKey("subjects.id"), nullable=False
     )
     category_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("categories.id"), nullable=True
