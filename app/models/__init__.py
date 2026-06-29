@@ -17,8 +17,9 @@ from app.models.pack import (
     Pack,
     PackAttempt,
     PackAttemptAnswer,
+    PackPurchase,
     PackQuestion,
-    PackSubscription,
+    PackSubscription,  # transitional alias
 )
 from app.models.question import (
     Question,
@@ -65,7 +66,8 @@ __all__ = [
     # pack
     "Pack",
     "PackQuestion",
-    "PackSubscription",
+    "PackPurchase",
+    "PackSubscription",  # transitional alias
     "PackAttempt",
     "PackAttemptAnswer",
     # stats

@@ -21,7 +21,9 @@ from app.core.db import UUID, Base, TZDateTime, created_at_col, uuid_fk, uuid_pk
 # Enum-like states as python constant tuples + CHECK constraints (project
 # convention; DB enum types are avoided). See question.py / daily_quiz.py.
 PACK_STATUSES = ("draft", "published", "archived")
-PACK_SUB_STATUSES = ("active", "completed", "cancelled")
+PACK_PURCHASE_STATUSES = ("active", "completed", "cancelled")
+# Transitional alias (renamed from PACK_SUB_STATUSES).
+PACK_SUB_STATUSES = PACK_PURCHASE_STATUSES
 PACK_ATTEMPT_STATUSES = ("in_progress", "completed", "abandoned")
 PACK_UNLOCK_KINDS = ("scheduled", "advanced")
 
@@ -89,18 +91,26 @@ class PackQuestion(Base):
     order_index: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
 
-class PackSubscription(Base):
-    """A user picking up a pack + their round-based progress (§6.3). Round
-    counter (rounds_unlocked) is the source of truth, not calendar dates."""
+class PackPurchase(Base):
+    """A user buying a pack + their round-based progress (§6.3). Round counter
+    (rounds_unlocked) is the source of truth, not calendar dates.
 
-    __tablename__ = "pack_subscriptions"
+    Renamed from PackSubscription (table pack_subscriptions -> pack_purchases) to
+    mirror onebite-server. NOTE: this cron repo never queries pack purchases —
+    the model is kept only to mirror the shared schema. `subscribed_at` and the
+    `pack_subscriptions` VIEW survive on the server until its Contract phase;
+    `purchased_at` is the going-forward column."""
+
+    __tablename__ = "pack_purchases"
     __table_args__ = (
-        UniqueConstraint("user_id", "pack_id", name="uq_pack_subs_user_pack"),
+        UniqueConstraint(
+            "user_id", "pack_id", name="uq_pack_purchases_user_pack"
+        ),
         CheckConstraint(
             "status IN ('active', 'completed', 'cancelled')",
-            name="ck_pack_subs_status",
+            name="ck_pack_purchases_status",
         ),
-        Index("ix_pack_subs_user_status", "user_id", "status"),
+        Index("ix_pack_purchases_user_status", "user_id", "status"),
     )
 
     id: Mapped[UUID] = uuid_pk()
@@ -115,8 +125,13 @@ class PackSubscription(Base):
     )
     last_round_on: Mapped[date | None] = mapped_column(Date)
     subscribed_at: Mapped[datetime] = created_at_col()
+    purchased_at: Mapped[datetime | None] = mapped_column(TZDateTime)
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime)
     cancelled_at: Mapped[datetime | None] = mapped_column(TZDateTime)
+
+
+# Transitional alias for the old class name.
+PackSubscription = PackPurchase
 
 
 class PackAttempt(Base):
@@ -137,11 +152,15 @@ class PackAttempt(Base):
             name="ck_pack_attempts_unlock_kind",
         ),
         Index("ix_pack_attempts_sub_round", "subscription_id", "round_index"),
+        Index("ix_pack_attempts_purchase_round", "purchase_id", "round_index"),
     )
 
     id: Mapped[UUID] = uuid_pk()
     subscription_id: Mapped[UUID] = uuid_fk(
-        "pack_subscriptions.id", ondelete="CASCADE"
+        "pack_purchases.id", ondelete="CASCADE"
+    )
+    purchase_id: Mapped[UUID | None] = uuid_fk(
+        "pack_purchases.id", ondelete="CASCADE", nullable=True
     )
     pack_id: Mapped[UUID] = uuid_fk("packs.id")
     round_index: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -198,11 +217,13 @@ class PackAttemptAnswer(Base):
 __all__ = [
     "Pack",
     "PackQuestion",
-    "PackSubscription",
+    "PackPurchase",
+    "PackSubscription",  # transitional alias
     "PackAttempt",
     "PackAttemptAnswer",
     "PACK_STATUSES",
-    "PACK_SUB_STATUSES",
+    "PACK_PURCHASE_STATUSES",
+    "PACK_SUB_STATUSES",  # transitional alias
     "PACK_ATTEMPT_STATUSES",
     "PACK_UNLOCK_KINDS",
 ]
